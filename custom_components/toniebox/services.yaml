@@ -168,6 +168,95 @@ sleeptimer:
           unit_of_measurement: min
           mode: box
 
+get_bedtime_schedules:
+  name: Get Bedtime Schedules
+  description: List the recurring bedtime schedules (incl. wake-up alarm) of a Toniebox 2.
+  fields:
+    entity_id:
+      name: Toniebox
+      required: true
+      selector:
+        entity:
+          integration: toniebox
+          domain: media_player
+
+set_bedtime_schedule:
+  name: Set Bedtime Schedule
+  description: Create a recurring bedtime schedule with optional wake-up alarm on a Toniebox 2, or update one when schedule_id is given.
+  fields:
+    entity_id:
+      name: Toniebox
+      required: true
+      selector:
+        entity:
+          integration: toniebox
+          domain: media_player
+    schedule_id:
+      name: Schedule ID
+      selector:
+        text:
+    name:
+      name: Name
+      selector:
+        text:
+    sleep_time:
+      name: Sleep Time
+      selector:
+        time:
+    wakeup_time:
+      name: Wake-up Time
+      selector:
+        time:
+    days:
+      name: Days
+      selector:
+        object:
+    enabled:
+      name: Enabled
+      selector:
+        boolean:
+    alarm_enabled:
+      name: Alarm Enabled
+      selector:
+        boolean:
+    alarm_morning_light:
+      name: Morning Light
+      selector:
+        boolean:
+    alarm_tone:
+      name: Alarm Tone
+      selector:
+        select:
+          options:
+            - alarmLoop1.opus
+            - alarmLoop2.opus
+            - alarmLoop3.opus
+            - alarmLoop4.opus
+            - alarmLoop5.opus
+    alarm_volume:
+      name: Alarm Volume
+      selector:
+        number:
+          min: 0
+          max: 100
+
+delete_bedtime_schedule:
+  name: Delete Bedtime Schedule
+  description: Delete a bedtime schedule from a Toniebox 2.
+  fields:
+    entity_id:
+      name: Toniebox
+      required: true
+      selector:
+        entity:
+          integration: toniebox
+          domain: media_player
+    schedule_id:
+      name: Schedule ID
+      required: true
+      selector:
+        text:
+
 redeem_content_token:
   name: Redeem Content Token
   description: Redeem a free content token onto a Creative Tonie.

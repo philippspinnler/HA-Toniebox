@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, SupportsResponse, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -347,6 +347,57 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema({
             vol.Required("entity_id"): cv.string,
             vol.Required("minutes"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        }),
+    )
+
+    schedule_fields = {
+        "name": "name", "sleep_time": "sleepTime", "wakeup_time": "wakeupTime", "days": "days",
+        "enabled": "enabled", "alarm_enabled": "alarmEnabled", "alarm_morning_light": "alarmMorningLight",
+        "alarm_tone": "alarmTone", "alarm_volume": "alarmVolume",
+    }
+
+    async def handle_get_bedtime_schedules(call):
+        client, hh_id, tb_id = await _find_toniebox(hass, call.data["entity_id"])
+        return {"schedules": await client.get_bedtime_schedules(hh_id, tb_id)}
+
+    async def handle_set_bedtime_schedule(call):
+        client, hh_id, tb_id = await _find_toniebox(hass, call.data["entity_id"])
+        payload = {api: call.data[key] for key, api in schedule_fields.items() if key in call.data}
+        if "schedule_id" in call.data:
+            return await client.patch_bedtime_schedule(hh_id, tb_id, call.data["schedule_id"], payload)
+        return await client.create_bedtime_schedule(hh_id, tb_id, payload)
+
+    async def handle_delete_bedtime_schedule(call):
+        client, hh_id, tb_id = await _find_toniebox(hass, call.data["entity_id"])
+        await client.delete_bedtime_schedule(hh_id, tb_id, call.data["schedule_id"])
+
+    hass.services.async_register(
+        DOMAIN, "get_bedtime_schedules", handle_get_bedtime_schedules,
+        schema=vol.Schema({vol.Required("entity_id"): cv.string}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "set_bedtime_schedule", handle_set_bedtime_schedule,
+        schema=vol.Schema({
+            vol.Required("entity_id"): cv.string,
+            vol.Optional("schedule_id"): cv.string,
+            vol.Optional("name"): cv.string,
+            vol.Optional("sleep_time"): cv.string,
+            vol.Optional("wakeup_time"): cv.string,
+            vol.Optional("days"): list,
+            vol.Optional("enabled"): cv.boolean,
+            vol.Optional("alarm_enabled"): cv.boolean,
+            vol.Optional("alarm_morning_light"): cv.boolean,
+            vol.Optional("alarm_tone"): cv.string,
+            vol.Optional("alarm_volume"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN, "delete_bedtime_schedule", handle_delete_bedtime_schedule,
+        schema=vol.Schema({
+            vol.Required("entity_id"): cv.string,
+            vol.Required("schedule_id"): cv.string,
         }),
     )
 
