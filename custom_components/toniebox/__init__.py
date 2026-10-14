@@ -364,12 +364,16 @@ def _register_services(hass: HomeAssistant) -> None:
         client, hh_id, tb_id = await _find_toniebox(hass, call.data["entity_id"])
         payload = {api: call.data[key] for key, api in schedule_fields.items() if key in call.data}
         if "schedule_id" in call.data:
-            return await client.patch_bedtime_schedule(hh_id, tb_id, call.data["schedule_id"], payload)
-        return await client.create_bedtime_schedule(hh_id, tb_id, payload)
+            result = await client.patch_bedtime_schedule(hh_id, tb_id, call.data["schedule_id"], payload)
+        else:
+            result = await client.create_bedtime_schedule(hh_id, tb_id, payload)
+        await _refresh_all(hass)
+        return result
 
     async def handle_delete_bedtime_schedule(call):
         client, hh_id, tb_id = await _find_toniebox(hass, call.data["entity_id"])
         await client.delete_bedtime_schedule(hh_id, tb_id, call.data["schedule_id"])
+        await _refresh_all(hass)
 
     hass.services.async_register(
         DOMAIN, "get_bedtime_schedules", handle_get_bedtime_schedules,
@@ -1407,6 +1411,10 @@ class TonieboxDataUpdateCoordinator(DataUpdateCoordinator):
                         "sleep_timer": prev_tb.get("sleep_timer") or {},
                         "extras": box.get("extras", {}),
                         "playback_info": playback_info,
+                        "bedtime_schedules": (
+                            await self.client.get_bedtime_schedules(hh_id, b_id)
+                            if "sleepTimerAlarm" in box.get("features", []) else []
+                        ),
                     }
             except Exception as e:
                 _LOGGER.debug("Could not fetch tonieboxes for %s: %s", hh_id, e)

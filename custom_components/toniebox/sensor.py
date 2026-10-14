@@ -1,12 +1,15 @@
 """Sensor platform — read-only state and info sensors."""
 from __future__ import annotations
 
+from datetime import timedelta
+
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .content_tonie import (
@@ -81,6 +84,8 @@ async def async_setup_entry(
                     HeadphonesBatterySensor(coordinator, hh_id, tb_id),
                     HeadphonesColorSensor(coordinator, hh_id, tb_id),
                 ]
+            if "sleepTimerAlarm" in features:
+                entities.append(TonieboxNextAlarmSensor(coordinator, hh_id, tb_id))
 
         # ── Creative Tonie sensors ────────────────────────────────────────────
         for t_id in hh.get("creativetonies", {}):
@@ -553,6 +558,43 @@ class TonieboxLastOnlineSensor(_TbBase):
     @property
     def native_value(self):
         return self._tb.get("last_online_at")
+
+
+WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+
+def next_alarm(schedules: list, now):
+    """Next wake-up of the enabled alarm schedules after `now` (tz-aware), or None."""
+    candidates = []
+    for s in schedules:
+        if not (s.get("enabled") and s.get("alarmEnabled")):
+            continue
+        hour, minute = map(int, s["wakeupTime"].split(":")[:2])
+        for offset in range(8):
+            t = (now + timedelta(days=offset)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if t > now and WEEKDAYS[t.weekday()] in s.get("days", []):
+                candidates.append(t)
+                break
+    return min(candidates, default=None)
+
+
+class TonieboxNextAlarmSensor(_TbBase):
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:alarm"
+    _attr_translation_key = "next_alarm"
+
+    def __init__(self, coordinator, hh_id, tb_id):
+        super().__init__(coordinator, hh_id, tb_id)
+        self._attr_unique_id = f"tb_{tb_id}_next_alarm"
+
+    @property
+    def native_value(self):
+        return next_alarm(self._tb.get("bedtime_schedules", []), dt_util.now())
+
+    @property
+    def extra_state_attributes(self):
+        return {"schedules": self._tb.get("bedtime_schedules", [])}
 
 
 class _HeadphonesBase(_TbIciBase):
