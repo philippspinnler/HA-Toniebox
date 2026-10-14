@@ -384,7 +384,7 @@ def _register_services(hass: HomeAssistant) -> None:
             vol.Optional("name"): cv.string,
             vol.Optional("sleep_time"): cv.string,
             vol.Optional("wakeup_time"): cv.string,
-            vol.Optional("days"): list,
+            vol.Optional("days"): [vol.In(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"])],
             vol.Optional("enabled"): cv.boolean,
             vol.Optional("alarm_enabled"): cv.boolean,
             vol.Optional("alarm_morning_light"): cv.boolean,
