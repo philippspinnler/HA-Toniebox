@@ -16,6 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN, CONF_USERNAME, CONF_PASSWORD, UPDATE_INTERVAL_MINUTES,
@@ -336,18 +337,34 @@ def _register_services(hass: HomeAssistant) -> None:
             )
             return
         mac = tb.get("mac_address") or ""
-        minutes = call.data["minutes"]
-        if minutes <= 0:
+        if "wakeup_time" in call.data:
+            now = dt_util.now()
+            wake = now.replace(hour=call.data["wakeup_time"].hour,
+                               minute=call.data["wakeup_time"].minute, second=0, microsecond=0)
+            if wake <= now:
+                wake += timedelta(days=1)
+            alarm = {
+                "morningLight": call.data["alarm_morning_light"],
+                "tone": call.data["alarm_tone"],
+                "volume": call.data["alarm_volume"],
+            }
+            seconds = (dt_util.as_utc(wake) - dt_util.utcnow()).total_seconds()
+            coordinator.ici_set_sleep_timer(mac, seconds, alarm)
+        elif call.data["minutes"] <= 0:
             coordinator.ici_cancel_sleep_timer(mac)
         else:
-            coordinator.ici_set_sleep_timer(mac, minutes * 60)
+            coordinator.ici_set_sleep_timer(mac, call.data["minutes"] * 60)
 
     hass.services.async_register(
         DOMAIN, "sleeptimer", handle_sleeptimer,
-        schema=vol.Schema({
+        schema=vol.All(cv.has_at_least_key("minutes", "wakeup_time"), vol.Schema({
             vol.Required("entity_id"): cv.string,
-            vol.Required("minutes"): vol.All(vol.Coerce(int), vol.Range(min=0)),
-        }),
+            vol.Optional("minutes"): vol.All(vol.Coerce(int), vol.Range(min=0)),
+            vol.Optional("wakeup_time"): cv.time,
+            vol.Optional("alarm_morning_light", default=False): cv.boolean,
+            vol.Optional("alarm_tone", default="alarmLoop1.opus"): cv.string,
+            vol.Optional("alarm_volume", default=100): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+        })),
     )
 
     schedule_fields = {
@@ -809,6 +826,7 @@ class TonieboxDataUpdateCoordinator(DataUpdateCoordinator):
                     "state": stl.get("state"),
                     "duration": stl.get("duration"),
                     "until": stl.get("until"),
+                    "alarm": stl.get("alarm"),
                 }
             else:
                 tb["sleep_timer"] = {}
@@ -888,11 +906,12 @@ class TonieboxDataUpdateCoordinator(DataUpdateCoordinator):
         self._ici_publish(mac, ICI_CMD_SLEEP_TIMER, {"state": "on", "duration": 300})
         return self._ici_publish(mac, ICI_CMD_SLEEP_NOW, {})
 
-    def ici_set_sleep_timer(self, mac: str, seconds: int) -> bool:
-        """Arm a sleep timer: the box falls asleep on its own after `seconds`."""
-        return self._ici_publish(
-            mac, ICI_CMD_SLEEP_TIMER, {"state": "on", "duration": int(seconds)}
-        )
+    def ici_set_sleep_timer(self, mac: str, seconds: int, alarm: dict | None = None) -> bool:
+        """Arm a sleep timer: the box falls asleep on its own after `seconds`, and wakes with `alarm`."""
+        payload = {"state": "on", "duration": int(seconds)}
+        if alarm:
+            payload.update(oneTimeAlarm=True, alarm=alarm)
+        return self._ici_publish(mac, ICI_CMD_SLEEP_TIMER, payload)
 
     def ici_cancel_sleep_timer(self, mac: str) -> bool:
         """Cancel a running sleep timer."""
