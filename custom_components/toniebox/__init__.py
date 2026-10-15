@@ -357,7 +357,7 @@ def _register_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(
         DOMAIN, "sleeptimer", handle_sleeptimer,
-        schema=vol.All(cv.has_at_least_key("minutes", "wakeup_time"), vol.Schema({
+        schema=vol.All(cv.has_at_least_one_key("minutes", "wakeup_time"), vol.Schema({
             vol.Required("entity_id"): cv.string,
             vol.Optional("minutes"): vol.All(vol.Coerce(int), vol.Range(min=0)),
             vol.Optional("wakeup_time"): cv.time,
