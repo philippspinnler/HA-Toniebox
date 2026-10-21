@@ -910,6 +910,8 @@ class TonieboxDataUpdateCoordinator(DataUpdateCoordinator):
         """Arm a sleep timer: the box falls asleep on its own after `seconds`, and wakes with `alarm`."""
         payload = {"state": "on", "duration": int(seconds)}
         if alarm:
+            # like the app; without it the box jumps to full volume
+            self._ici_publish(mac, "alarm-preview", {"tone": None})
             payload.update(oneTimeAlarm=True, alarm=alarm)
         return self._ici_publish(mac, ICI_CMD_SLEEP_TIMER, payload)
 
